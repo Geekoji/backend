@@ -1,0 +1,47 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+
+metadata:
+  name: {{ .Release.Name }}-migrations
+  namespace: {{ .Release.Namespace }}
+
+  labels:
+    app: {{ .Release.Name }}
+
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          command: {{ toYaml .Values.migrations.command | nindent 12 }}
+          args: {{ toYaml .Values.migrations.args | nindent 12 }}
+
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            {{- if .Values.secrets }}
+            - secretRef:
+                name: {{ .Release.Name }}-secrets
+            {{- end }}
+
+          resources:
+            requests:
+              cpu: {{ .Values.migrations.resources.requests.cpu }}
+              memory: {{ .Values.migrations.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.migrations.resources.limits.cpu }}
+              memory: {{ .Values.migrations.resources.limits.memory }}
+{{- end }}

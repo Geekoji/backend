@@ -1,0 +1,12 @@
+services:
+  docs-service:
+    image: mimspace/docs-service:develop
+    container_name: docs-service
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: ../.env
+    ports:
+      - ${DOCS_SERVICE_PORT:-8000}:8000
+    volumes:
+      - ../src:/src:ro
+    mem_limit: 128m
+    cpus: 0.1

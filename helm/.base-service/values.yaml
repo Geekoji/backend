@@ -1,0 +1,73 @@
+replicaCount: 1
+revisionHistoryLimit: 3
+
+image:
+  repository: null
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+probes:
+  startup:
+    enabled: true
+    initialDelaySeconds: 20
+    failureThreshold: 30
+    periodSeconds: 10
+    successThreshold: 1
+    timeoutSeconds: 3
+
+  liveness:
+    enabled: true
+    failureThreshold: 3
+    periodSeconds: 30
+    successThreshold: 1
+    timeoutSeconds: 3
+
+  readiness:
+    enabled: true
+    failureThreshold: 1
+    periodSeconds: 10
+    successThreshold: 2
+    timeoutSeconds: 3
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+volumeMounts:
+  - name: logs-volume
+    mountPath: /mnt/nfs/logs
+
+volumes:
+  - name: logs-volume
+    hostPath:
+      path: /mnt/nfs/logs
+      type: DirectoryOrCreate
+
+migrations:
+  enabled: false
+  command: ["/bin/sh", "-c"]
+  args: ["python -m alembic upgrade head"]
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80

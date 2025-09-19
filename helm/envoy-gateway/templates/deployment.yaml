@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ .Values.envoyAppName }}
+  namespace: {{ .Release.Namespace }}
+
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+
+  selector:
+    matchLabels:
+      app: {{ .Values.envoyAppName }}
+
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.envoyAppName }}
+
+    spec:
+      containers:
+        - name: {{ .Values.envoyAppName }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          args:
+            - "-c"
+            - "/etc/envoy/envoy.yaml"
+            - "--service-node"
+            - "envoy-gateway"
+            - "--service-cluster"
+            - "api-gateway"
+
+          ports:
+            - containerPort: {{ .Values.service.targetPorts.http }}
+            - containerPort: {{ .Values.service.targetPorts.https }}
+            - containerPort: {{ .Values.service.targetPorts.admin }}
+
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.service.targetPorts.admin }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: {{ .Values.service.targetPorts.admin }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+
+            - name: envoy-certs
+              mountPath: /etc/envoy/certs
+              readOnly: true
+
+      volumes:
+        - name: envoy-config
+          configMap:
+            name: {{ .Values.envoyConfigMapName }}
+
+        - name: envoy-certs
+          secret:
+            secretName: {{ .Values.certificate.name }}

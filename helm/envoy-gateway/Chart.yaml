@@ -1,0 +1,6 @@
+apiVersion: v2
+name: envoy-chart
+description: Helm chart for Envoy Gateway
+type: application
+version: 0.1.0
+appVersion: "v1.35.0"

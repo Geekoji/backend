@@ -1,0 +1,2 @@
+- match: { safe_regex: { regex: "^/(docs|openapi/.*\\.json)" } }
+  route: { cluster: docs-service }

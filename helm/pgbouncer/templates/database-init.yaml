@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+
+metadata:
+  name: {{ .Release.Name }}-database-init
+  labels: {{ include "pgbouncer.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+
+  template:
+    metadata:
+      name: database-init
+
+    spec:
+      restartPolicy: OnFailure
+
+      containers:
+        - name: database-init
+          image: bitnami/postgresql:17.6.0-debian-12-r4
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: POSTGRES_HOST
+              value: postgresql.{{ .Release.Namespace }}.svc.cluster.local
+
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.pgbouncer.config.existingAdminSecret }}
+                  key: {{ .Values.pgbouncer.config.adminPasswordKey }}
+
+          envFrom:
+            - secretRef:
+                name: {{ .Values.pgbouncer.config.existingAdminSecret }}
+
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+
+              echo "Waiting for PostgreSQL to be ready..."
+              until pg_isready -h "${POSTGRES_HOST}" -U postgres -p 5432; do
+                sleep 10
+              done
+
+              echo "Collecting credentials..."
+              {{- $creds := include "pgbouncer.credentials" . | fromYaml }}
+
+              echo "Creating/updating roles..."
+              psql -h ${POSTGRES_HOST} -U postgres -p 5432 <<EOSQL
+              DO \$do\$
+              BEGIN
+                {{- range $db, $x := $creds }}
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='{{ $x.user }}') THEN
+                  EXECUTE format('CREATE ROLE %I WITH LOGIN PASSWORD %L', '{{ $x.user }}', '{{ $x.password }}');
+                ELSE
+                  EXECUTE format('ALTER ROLE %I WITH PASSWORD %L', '{{ $x.user }}', '{{ $x.password }}');
+                END IF;
+                {{ end }}
+              END
+              \$do\$;
+              EOSQL
+
+              echo "Creating/updating databases..."
+              {{- range $db, $x := $creds }}
+              SQL1="SELECT 1 FROM pg_database WHERE datname='{{ $db }}'"
+              SQL2="CREATE DATABASE \"{{ $db }}\" OWNER \"{{ $x.user }}\""
+              psql -h ${POSTGRES_HOST} -U postgres -p 5432 -tAc "${SQL1}" | grep -q 1 || \
+              psql -h ${POSTGRES_HOST} -U postgres -p 5432 -c "${SQL2}"
+              {{ end }}

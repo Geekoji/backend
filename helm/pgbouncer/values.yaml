@@ -1,0 +1,41 @@
+pgbouncer:
+  fullnameOverride: pgbouncer
+
+  service:
+    type: NodePort
+    nodePort: 32543
+
+  resources:
+    requests:
+      cpu: 20m
+      memory: 20Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+  extraVolumes:
+    - name: secrets
+      secret:
+        secretName: pgbouncer-secrets
+
+  extraVolumeMounts:
+    - name: secrets
+      mountPath: /etc/secrets
+
+  config:
+    existingAdminSecret: pgbouncer-secrets
+    existingUserlistSecret: pgbouncer-userlist-secret
+
+    adminUser: postgres
+    adminPasswordKey: POSTGRES_ADMIN_PASSWORD
+
+    pgbouncer:
+      pool_mode: session
+      max_client_conn: 610  # (default_pool_size * db_count) + admin_slots
+      default_pool_size: 150  # pools per database
+      ignore_startup_parameters: extra_float_digits
+
+    databases:
+      auth-db:
+        host: postgresql.pg-development.svc.cluster.local
+        port: 5432

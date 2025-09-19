@@ -1,0 +1,6 @@
+dependencies:
+- name: pgbouncer
+  repository: https://icoretech.github.io/helm
+  version: 3.0.0
+digest: sha256:02db2e16710f4e7b5996fb74ca4fd8f7a3e480002642c77593db3dc5c9e8a66a
+generated: "2025-09-01T14:34:30.7002493+03:00"

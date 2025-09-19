@@ -1,0 +1,12 @@
+services:
+  test-runner:
+    image: mimspace/docs-service:develop
+    container_name: test-container
+    user: root
+    ports:
+      - "8001:8000"
+    volumes:
+      - ../src:/src/
+      - ../tests/:/tests/
+      - ../../../scripts:/scripts:ro
+      - ../pyproject.toml:/tmp/pyproject.toml

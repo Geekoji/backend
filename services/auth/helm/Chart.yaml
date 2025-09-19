@@ -1,0 +1,10 @@
+apiVersion: v2
+name: auth-service
+description: Auth microservice
+version: 0.1.0
+appVersion: "v0.5.10"
+
+dependencies:
+  - name: service
+    version: "1.0.0"
+    repository: "file://../../../helm/.base-service"

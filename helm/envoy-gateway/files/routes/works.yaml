@@ -1,0 +1,10 @@
+- match: { prefix: "/works" }
+  route: { cluster: work-service }
+  request_headers_to_add:
+    - header:
+        key: "x-forwarded-prefix"
+        value: "/works"
+  typed_per_filter_config:
+    envoy.filters.http.buffer:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.buffer.v3.BufferPerRoute
+      buffer: { max_request_bytes: 5242880 }  # 5MB

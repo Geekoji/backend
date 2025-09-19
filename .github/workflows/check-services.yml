@@ -1,0 +1,112 @@
+name: Check Changed Services
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+    paths:
+      - 'services/**/src/**'
+      - 'services/**/tests/**'
+      - 'services/**/poetry.lock'
+
+jobs:
+  detect-changes:
+    uses: ./.github/workflows/detect-changed-services.yml
+    with:
+      target_branch: ${{ github.event.pull_request.base.ref }}
+
+  lint:
+    runs-on: ubuntu-latest
+
+    needs: detect-changes
+    if: needs.detect-changes.outputs.services != '[]'
+
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+
+    outputs:
+      services: ${{ needs.detect-changes.outputs.services }}
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      GITHUB_ACCESS_TOKEN: ${{ secrets.WORKFLOW_ACCESS_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure git credentials
+        run: |
+          GITHUB_ACCESS_TOKEN_FILE="${HOME}/.github-access-token"
+          mkdir -p $(dirname "${GITHUB_ACCESS_TOKEN_FILE}")
+          
+          echo "${{ env.GITHUB_ACCESS_TOKEN }}" > "${GITHUB_ACCESS_TOKEN_FILE}"
+          
+          NEW_URL="https://$(cat ${GITHUB_ACCESS_TOKEN_FILE})@github.com/"
+          git config --global url.${NEW_URL}.insteadOf "https://github.com/"
+
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          cd ./services/${{ matrix.service }}
+          poetry install --no-interaction --no-root
+
+      - run: make isort ${{ matrix.service }}
+      - run: make black ${{ matrix.service }}
+      - run: make flake8 ${{ matrix.service }}
+      - run: make mypy ${{ matrix.service }}
+
+  tests:
+    runs-on: ubuntu-latest
+
+    needs: lint
+    if: needs.lint.outputs.services != '[]'
+
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.lint.outputs.services) }}
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      GITHUB_ACCESS_TOKEN: ${{ secrets.WORKFLOW_ACCESS_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure files and environment variables in workspace
+        id: configure
+        run: |
+          # Set environment variables for the next steps
+          IMAGE_REPOSITORY="${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.service }}-service"
+          echo "IMAGE_REPOSITORY=${IMAGE_REPOSITORY}" >> "${GITHUB_ENV}"
+
+          # Create an access token file for `docker build --secret`
+          GITHUB_ACCESS_TOKEN_FILE="${HOME}/.github-access-token"
+          mkdir -p "$(dirname "${GITHUB_ACCESS_TOKEN_FILE}")"
+          echo "${{ env.GITHUB_ACCESS_TOKEN }}" > "${GITHUB_ACCESS_TOKEN_FILE}"
+          echo "GITHUB_ACCESS_TOKEN_FILE=${GITHUB_ACCESS_TOKEN_FILE}" >> "${GITHUB_ENV}"
+
+      # --- Build docker image and run tests ---------------------------------------------------------------------------
+      - name: Build docker image
+        run: |
+          docker build \
+            --build-arg POETRY_FLAGS="--only main,test" \
+            --file ./services/${{ matrix.service }}/docker/Dockerfile \
+            --tag ${{ env.IMAGE_REPOSITORY }}:develop \
+            --target final \
+            --secret id=github_token,src="${{ env.GITHUB_ACCESS_TOKEN_FILE }}" \
+            ./services/${{ matrix.service }}
+
+      - name: Run tests
+        run: |
+          DOCKER_COMPOSE="./services/${{ matrix.service }}/docker/docker-compose.testing.yml"
+          
+          docker compose -f "${DOCKER_COMPOSE}" run \
+            --rm test-runner python /scripts/run_tests.py --pytest

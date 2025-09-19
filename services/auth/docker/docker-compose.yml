@@ -1,0 +1,64 @@
+services:
+  auth-postgres:
+    image: postgres:latest
+    container_name: auth-postgres
+    env_file: ../.env
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -h auth-postgres -p 5432" ]
+      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - ${POSTGRES_PORT:-5433}:5432
+    volumes:
+      - auth-postgres-data:/var/lib/postgresql/data
+    mem_limit: 512m
+    cpus: 0.5
+
+  auth-redis:
+    image: redis:latest
+    container_name: auth-redis
+    env_file: ../.env
+    restart: always
+    environment:
+      - SKIP_DROP_PRIVS=1
+    command: >
+      sh -c "
+        echo 'user ${REDIS_USERNAME} on >${REDIS_PASSWORD} allcommands allkeys' > /data/users.acl &&
+        redis-server --aclfile /data/users.acl
+      "
+    healthcheck:
+      test: ["CMD", "redis-cli", "-u", "redis://${REDIS_USERNAME}:${REDIS_PASSWORD}@localhost:6379", "ping"]
+      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - ${REDIS_PORT:-6379}:6379
+    volumes:
+      - auth-redis-data:/data
+    mem_limit: 256m
+    cpus: 0.25
+
+  auth-service:
+    image: mimspace/auth-service:develop
+    container_name: auth-service
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: ../.env
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+      auth-redis:
+        condition: service_healthy
+    ports:
+      - ${AUTH_SERVICE_PORT:-8000}:8000
+    volumes:
+      - ../src:/src:ro
+    mem_limit: 512m
+    cpus: 0.5
+
+volumes:
+  auth-postgres-data:
+  auth-redis-data:

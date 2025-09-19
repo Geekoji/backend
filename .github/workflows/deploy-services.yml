@@ -1,0 +1,161 @@
+name: Deploy Changed Services
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'services/**/helm/**'
+      - 'services/**/src/**'
+      - 'services/**/poetry.lock'
+
+permissions:
+  contents: write
+
+jobs:
+  detect-changes:
+    uses: ./.github/workflows/detect-changed-services.yml
+    with:
+      target_branch: ${{ github.ref_name }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.code_changes != '[]' || 
+      needs.detect-changes.outputs.helm_changes != '[]'
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      GITHUB_ACCESS_TOKEN: ${{ secrets.WORKFLOW_ACCESS_TOKEN }}
+      GPG_PRIVATE_KEY: ${{ secrets.WORKFLOW_GPG_PRIVATE_KEY }}
+
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      KUBECONFIG_BASE64: ${{ secrets.KUBECONFIG_BASE64 }}
+
+    steps:
+      # --- Checkout and setup tools -----------------------------------------------------------------------------------
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ env.GITHUB_ACCESS_TOKEN }}
+          persist-credentials: true
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
+      - name: Setup SOPS
+        uses: nhedger/setup-sops@v2
+
+      - name: Install helm-secrets plugins
+        run: helm plugin install https://github.com/jkroepke/helm-secrets
+
+      # --- Resolve docker image tag -----------------------------------------------------------------------------------
+      - name: Resolve image tag
+        id: resolve
+        run: |
+          IMAGE_REPOSITORY="${{ env.DOCKERHUB_USERNAME }}/${{ matrix.service }}-service"
+          TAG_LITERAL=$(if [[ "${{ github.ref_name }}" == "main" ]]; then echo "latest"; else echo "develop"; fi)
+          CODE_CHANGES='${{ needs.detect-changes.outputs.code_changes }}'
+
+          if jq -e ".[] | select(. == \"${{ matrix.service }}\")" <<< ${CODE_CHANGES} > /dev/null; then
+            TAG_VERSION=$(bash ./scripts/get_image_tag.sh "${IMAGE_REPOSITORY}" --next-version)
+            BUILD_IMAGE=true
+          else
+            TAG_VERSION=$(bash ./scripts/get_image_tag.sh "${IMAGE_REPOSITORY}")
+            BUILD_IMAGE=false
+          fi
+          
+          # Set outputs
+          echo "build_image=${BUILD_IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "IMAGE_TAG=${TAG_VERSION}" >> "${GITHUB_ENV}"
+          echo "IMAGE_TAG_LITERAL=${TAG_LITERAL}" >> "${GITHUB_ENV}"
+          echo "IMAGE_REPOSITORY=${IMAGE_REPOSITORY}" >> "${GITHUB_ENV}"
+
+      # --- Build docker image and push to DockerHub -------------------------------------------------------------------
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_PASSWORD }}
+
+      - name: Build and push docker image
+        if: steps.resolve.outputs.build_image == 'true'
+        run: |
+          # Create an access token file for `docker build --secret`
+          GITHUB_ACCESS_TOKEN_FILE="${HOME}/.github-access-token"
+          mkdir -p "$(dirname "${GITHUB_ACCESS_TOKEN_FILE}")"
+          echo "${{ env.GITHUB_ACCESS_TOKEN }}" > "${GITHUB_ACCESS_TOKEN_FILE}"
+          
+          # Build docker image
+          docker build \
+            --build-arg POETRY_FLAGS="--only main" \
+            --file ./services/${{ matrix.service }}/docker/Dockerfile \
+            --tag ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }} \
+            --tag ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG_LITERAL }} \
+            --target final \
+            --secret id=github_token,src="${GITHUB_ACCESS_TOKEN_FILE}" \
+            ./services/${{ matrix.service }}
+
+          # Push docker image
+          docker push ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          docker push ${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG_LITERAL }}
+
+      # --- Tag git commit ---------------------------------------------------------------------------------------------
+      - name: Create commit tag
+        if: steps.resolve.outputs.build_image == 'true'
+        run: |
+          # Configure git credentials
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Tag git commit with service and image version
+          TAG="${{ matrix.service }}-v${{ env.IMAGE_TAG}}"
+          git tag ${TAG}
+          git push origin ${TAG}
+
+      # --- Deploy service ---------------------------------------------------------------------------------------------
+      - name: Setup kubeconfig
+        run: |
+          KUBECONFIG_FILE="${HOME}/.kube/config"
+          mkdir -p "$(dirname "${KUBECONFIG_FILE}")"
+
+          echo "${{ env.KUBECONFIG_BASE64 }}" | base64 -d > "${KUBECONFIG_FILE}"
+          echo "KUBECONFIG_FILE=${KUBECONFIG_FILE}" >> "${GITHUB_ENV}"
+          chmod 600 "${KUBECONFIG_FILE}"
+
+      - name: Setup GPG for sops
+        run: echo "${{ env.GPG_PRIVATE_KEY }}" | gpg --batch --import -
+
+      - name: Decrypt secrets and deploy
+        run: |
+          CHART_NAME="${{ matrix.service }}-service"
+          CHART_DIR="./services/${{ matrix.service }}/helm"
+          
+          NAMESPACE=$(
+            [[ "${{ github.ref_name }}" == "main" ]] && \
+            echo "production" || echo "development"
+          )
+
+          HELM_VALUE_FILES=()
+          if [ -f "${CHART_DIR}/secrets.enc.yaml" ]; then
+              HELM_VALUE_FILES+=("-f" "${CHART_DIR}/secrets.enc.yaml")
+          fi
+
+          helm dependency update "${CHART_DIR}"
+          helm secrets upgrade --install "${CHART_NAME}" "${CHART_DIR}" \
+            "${HELM_VALUE_FILES[@]}" \
+            --namespace "${NAMESPACE}" \
+            --create-namespace \
+            --set service.image.tag=${{ env.IMAGE_TAG }} \
+            --kubeconfig "${{ env.KUBECONFIG_FILE }}" \
+            --timeout 5m \
+            --atomic

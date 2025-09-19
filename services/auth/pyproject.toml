@@ -1,0 +1,155 @@
+[project]
+name = "mimspace-auth-service"
+version = "0.1.0"
+description = "Authentication microservice"
+authors = [
+    {name = "usik-sviatoslav",email = "usik.sviatoslav.dev@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "alembic (>=1.16.4,<2.0.0)",
+    "authlib (>=1.6.1,<2.0.0)",
+    "bcrypt (>=4.3.0,<5.0.0)",
+    "httpx (>=0.28.1,<0.29.0)",
+    "itsdangerous (>=2.2.0,<3.0.0)",
+    "mimspace-shared @ git+https://github.com/mim-space/mim-shared.git@main",
+    "passlib (>=1.7.4,<2.0.0)",
+    "psycopg2 (>=2.9.10,<3.0.0)",
+    "pydantic[email] (>=2.11.7,<3.0.0)",
+    "redis (>=6.2.0,<7.0.0)",
+    "uuid6 (>=2025.0.1,<2026.0.0)",
+]
+
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^4.2.0"
+
+
+[tool.poetry.group.lint.dependencies]
+black = "^25.1.0"
+isort = "^6.0.1"
+flake8 = "^7.2.0"
+flake8-bugbear = "^24.12.12"
+flake8-pyproject = "^1.2.3"
+flake8-functions = "^0.0.8"
+flake8-variables-names = "^0.0.6"
+flake8-class-attributes-order = "^0.3.0"
+
+
+[tool.poetry.group.typecheck.dependencies]
+mypy = "^1.17.0"
+types-passlib = "^1.7.7.20250602"
+types-authlib = "^1.6.0.20250711"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.4.0"
+pytest-mock = "^3.14.1"
+pytest-cov = "^6.2.1"
+pytest-asyncio = "^1.1.0"
+
+
+# --- ISORT CONFIG: https://pycqa.github.io/isort/docs/configuration/profiles --  ---  ---  ---  ---  ---  ---  ---  ---
+
+
+[tool.isort]
+profile = "black"
+force_grid_wrap = 0
+line_length = 120
+multi_line_output = 3
+include_trailing_comma = true
+use_parentheses = true
+
+
+# --- BLACK CONFIG: https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html -  ---  ---  ---  ---
+
+
+[tool.black]
+line-length = 120
+
+
+# --- FLAKE8 CONFIG: https://flake8.pycqa.org/en/latest/user/configuration.html   ---  ---  ---  ---  ---  ---  ---  ---
+
+
+[tool.flake8]
+exclude = [
+    ".env",
+    ".git",
+    "venv",
+    "poetry.lock",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+]
+ignore = []
+max-complexity = 8
+max-line-length = 120
+max-returns-amount = 4
+
+
+# --- MYPY CONFIG: https://mypy.readthedocs.io/en/stable/config_file.html -  ---  ---  ---  ---  ---  ---  ---  ---  ---
+
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = ["src"]
+plugins = ["pydantic.mypy"]
+exclude = ["local"]
+
+ignore_errors = false
+ignore_missing_imports = false
+pretty = true
+strict = true
+show_absolute_path = true
+show_column_numbers = true
+show_error_context = true
+show_traceback = true
+warn_unreachable = true
+warn_no_return = true
+
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = ["asyncpg.*"]
+
+
+# --- PYTEST CONFIG: https://docs.pytest.org/en/latest/reference/customize.html   ---  ---  ---  ---  ---  ---  ---  ---
+
+
+[tool.pytest.ini_options]
+addopts = [
+    "--exitfirst",
+    "--color=yes",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--cov-fail-under=85",
+    "--failed-first",
+    "--new-first",
+    "--pythonwarnings=error",
+]
+testpaths = ["/tests"]
+markers = ["unit", "smoke"]
+python_files = ["tests.py", "test_*.py", "*_test.py"]
+
+
+# --- COVERAGE CONFIG: https://coverage.readthedocs.io/en/latest/config.html ---  ---  ---  ---  ---  ---  ---  ---  ---
+
+
+[tool.coverage.run]
+source = ["/src"]
+data_file = "/tests/htmlcov/.coverage"
+omit = ["/src/core/*", "/tests/*"]
+branch = true
+
+
+[tool.coverage.html]
+directory = "/tests/htmlcov"
+
+
+# --- SYSTEM --  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---  ---
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

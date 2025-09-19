@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: test-postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U avnadmin -h postgres -p 5432" ]
+      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "5433:5432"
+    volumes:
+      - test-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:latest
+    container_name: test-redis
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli", "ping" ]
+      start_period: 30s
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "6380:6379"
+    volumes:
+      - test-redis-data:/data
+
+  test-runner:
+    image: mimspace/auth-service:develop
+    container_name: test-container
+    environment:
+      POSTGRES_HOST: postgres
+    user: root
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    volumes:
+      - ../src:/src/
+      - ../tests/:/tests/
+      - ../../../scripts:/scripts:ro
+      - ../pyproject.toml:/tmp/pyproject.toml
+
+volumes:
+  test-postgres-data:
+  test-redis-data:

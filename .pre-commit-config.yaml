@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: auth
+        name: auth
+        entry: make check auth
+        language: system
+        types: [ python ]
+        pass_filenames: false
+        files: ^services/auth/
+
+  - repo: local
+    hooks:
+      - id: docs
+        name: docs
+        entry: make check docs
+        language: system
+        types: [ python ]
+        pass_filenames: false
+        files: ^services/docs/

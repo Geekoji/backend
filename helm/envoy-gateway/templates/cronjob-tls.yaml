@@ -1,0 +1,65 @@
+{{- if .Values.certificate.cronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+
+metadata:
+  name: restart-envoy-on-tls-update
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    description: "Restart envoy-gateway if TLS Secret {{ .Values.certificate.name }} changes"
+
+spec:
+  schedule: "{{ .Values.certificate.cronJob.schedule }}"
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 5
+
+      template:
+        spec:
+          serviceAccountName: {{ .Values.certificate.cronJob.RBAC.name }}
+          restartPolicy: OnFailure
+
+          containers:
+            - name: restart-envoy
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+
+                  CM_NAME="tls-revision"
+                  CM_NAMESPACE="{{ .Release.Namespace }}"
+
+                  # Get the current resourceVersion Secret
+                  CURRENT_REV=$(kubectl get secret {{ .Values.certificate.name }} \
+                    -n {{ .Release.Namespace }} \
+                    -o jsonpath="{.metadata.resourceVersion}")
+
+                  # Check if ConfigMap exists
+                  if ! kubectl get configmap "${CM_NAME}" -n "${CM_NAMESPACE}" >/dev/null 2>&1; then
+                    echo "ConfigMap not found, create..."
+
+                    kubectl create configmap "${CM_NAME}" \
+                      -n "${CM_NAMESPACE}" \
+                      --from-literal=prev_rev="${CURRENT_REV}" \
+                      --dry-run=client -o yaml | kubectl apply -f -
+
+                    echo "First run, no restart needed."; exit 0
+                  fi
+
+                  # Get previous revision from ConfigMap
+                  PREV_REV=$(kubectl get configmap "${CM_NAME}" \
+                    -o jsonpath="{.data.prev_rev}" \
+                    -n "${CM_NAMESPACE}")
+
+                  if [ "${CURRENT_REV}" != "${PREV_REV}" ]; then
+                    echo "TLS Secret has changed, restart envoy-gateway..."
+                    kubectl rollout restart deployment/envoy-gateway -n "${CM_NAMESPACE}"
+                    kubectl patch configmap "${CM_NAME}" \
+                      -p "{\"data\":{\"prev_rev\":\"${CURRENT_REV}\"}}" \
+                      -n "${CM_NAMESPACE}"
+                  else
+                    echo "TLS Secret unchanged."
+                  fi
+{{- end }}

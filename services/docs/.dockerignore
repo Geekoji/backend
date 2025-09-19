@@ -1,0 +1,40 @@
+# Python bytecode and cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment files
+.env
+.env.example
+
+# Git и IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# Cache and test artifacts
+.pytest_cache/
+coverage.*
+htmlcov/
+
+# Mypy cache
+.mypy_cache/
+
+# Build artifacts and packaging
+build/
+dist/
+*.egg-info/
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# System files (Mac, Windows)
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+stores: { yaml: { indent: 2 } }
+
+creation_rules:
+  - path_regex: secrets.yaml
+    key_groups:
+    - pgp:
+      - "B4E593D08CC362F036ABB8CC8E25E9CBEF9F2036"  # support@no-words.space
+      - "E06B8D3AB28AC0113B85A40DAD5A0FE81E8FE7E5"  # usik.sviatoslav.dev@gmail.com
+      - "130B09F99469AFC701C7CEB155604CB8557E4171"  # mashkin.vanya@gmail.com

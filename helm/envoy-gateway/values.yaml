@@ -1,0 +1,52 @@
+envoyAppName: envoy-gateway
+envoyConfigMapName: envoy-config
+
+image:
+  repository: envoyproxy/envoy
+  tag: v1.35.0
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+revisionHistoryLimit: 3
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 150m
+    memory: 128Mi
+
+service:
+  type: LoadBalancer
+  ports:
+    http: 80
+    https: 443
+  targetPorts:
+    http: 8080
+    https: 8443
+    admin: 9901
+
+providers:
+  auth0:
+    issuer: "https://auth.no-words.space"
+
+virtualHosts:
+  domains: [ "api.no-words.space" ]
+
+certificate:
+  name: wildcard-tls
+  issuerName: letsencrypt-dns
+
+  commonName: "*.no-words.space"
+  dnsNames: [ "*.no-words.space" ]
+
+  cronJob:
+    # Check every day at 03:00 UTC if the certificate is not updated by cert-manager.
+    # If the certificate is updated, restarts the pod to apply the new certificate.
+    enabled: true
+    schedule: "0 3 * * *"
+
+    RBAC:
+      name: tls-cron-sa
+      roleName: tls-cron-role

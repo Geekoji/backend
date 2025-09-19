@@ -1,0 +1,11 @@
+apiVersion: v2
+name: pgbouncer
+description: Chart for PgBouncer
+type: application
+version: 0.1.0
+appVersion: "3.0.0"
+
+dependencies:
+  - name: pgbouncer
+    version: "3.0.0"
+    repository: https://icoretech.github.io/helm

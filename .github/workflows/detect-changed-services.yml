@@ -1,0 +1,93 @@
+name: Detect Changed Services
+
+on:
+  workflow_call:
+    inputs:
+      target_branch:
+        required: false
+        type: string
+        default: 'develop'
+
+    outputs:
+      code_changes:
+        description: Services changed in code (src dir + poetry deps)
+        value: ${{ jobs.detect-changes.outputs.code_changes }}
+      helm_changes:
+        description: Services changed only in helm
+        value: ${{ jobs.detect-changes.outputs.helm_changes }}
+      services:
+        description: Combined services for deploy (code + helm)
+        value: ${{ jobs.detect-changes.outputs.services }}
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+
+    outputs:
+      code_changes: ${{ steps.collect.outputs.code_changes }}
+      helm_changes: ${{ steps.collect.outputs.helm_changes }}
+      services: ${{ steps.collect.outputs.services }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine diff range
+        id: refs
+        run: |
+          echo "Target branch: ${{ inputs.target_branch }}"
+          git fetch origin ${{ inputs.target_branch }}
+          
+          base_ref=$(git merge-base origin/${{ inputs.target_branch }} HEAD)
+          head_sha=$(git rev-parse HEAD)
+          
+          if [ "${base_ref}" = "${head_sha}" ]; then
+            base_ref=$(git rev-parse HEAD^)
+          fi
+          
+          echo "base_ref=${base_ref}" >> "${GITHUB_OUTPUT}"
+          echo "head_sha=${head_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Collect changed services
+        id: collect
+        env:
+          BASE: ${{ steps.refs.outputs.base_ref }}
+          HEAD: ${{ steps.refs.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          DIFF=$(git diff --name-only "$BASE" "$HEAD")
+          
+          # --- Code changes ---
+          code_changes=$(
+            echo "${DIFF}" \
+            | awk -F/ '/^services\/[^\/]+\/(src\/|poetry\.lock)/ {print $2}' \
+            | sort -u \
+            | jq -R . \
+            | jq -s -c .
+          )
+          
+          # --- Helm changes ---
+          helm_changes=$(
+            echo "${DIFF}" \
+            | awk -F/ '/^services\/[^\/]+\/(helm\/)/ {print $2}' \
+            | sort -u \
+            | jq -R . \
+            | jq -s -c .
+          )
+          
+          # --- Exclude code_changes from helm_changes ---
+          helm_changes=$(jq -c -n --argjson a "${helm_changes}" --argjson b "${code_changes}" '$a - $b')
+          
+          # --- Combine arrays for the matrix ---
+          services=$(jq -c -n --argjson a "${code_changes}" --argjson b "${helm_changes}" '$a + $b')
+          
+          # --- Export outputs ---
+          echo "code_changes=${code_changes}" >> "${GITHUB_OUTPUT}"
+          echo "helm_changes=${helm_changes}" >> "${GITHUB_OUTPUT}"
+          echo "services=${services}" >> "${GITHUB_OUTPUT}"

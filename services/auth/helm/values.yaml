@@ -1,0 +1,60 @@
+service:
+  replicaCount: 1
+
+  image:
+    repository: mimspace/auth-service
+
+  resources:
+    requests:
+      cpu: 25m
+      memory: 96Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+  migrations:
+    enabled: true
+
+  autoscaling:
+    enabled: false
+
+  env:
+    APPLE_IOS_CLIENT_ID: "__value__"
+    APPLE_WEB_CLIENT_ID: "__value__"
+    ENV_STATE: "development"
+    FACEBOOK_ANDROID_CLIENT_ID: "__value__"
+    FACEBOOK_IOS_CLIENT_ID: "__value__"
+    FACEBOOK_WEB_CLIENT_ID: "1280574866796547"
+    GOOGLE_ANDROID_CLIENT_ID: "213509778958-u9cm43u3umiaakk1kkkb70hkeo565ic4.apps.googleusercontent.com"
+    GOOGLE_IOS_CLIENT_ID: "213509778958-gotj8veqo4vp8lhc4u8kl3f58sslcjcn.apps.googleusercontent.com"
+    GOOGLE_WEB_CLIENT_ID: "213509778958-g0mqk3cj0l2g4r65g9999k0eq853h7d8.apps.googleusercontent.com"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: 5
+    JWT_ALGORITHM: "RS256"
+    JWT_ISSUER: "https://auth.no-words.space"
+    JWT_PUBLIC_KEY_0: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs88qOgm5FdDHkZ29Zaue
+      UExog8GKZ0kDHxFIwbJ+pW3HgRfWiWdkSSzeFBmEFR18jZQRnC3PvqxlRzB1jB+6
+      S+aijkflpRe5NOI8m+BNJlCD0d9njtvFHqk1PGm6kNGM1TRp/UI8H8fQBqngP0+Z
+      8/P2ghBn7DfAIuETm4RwXe/3D+2jCM8apefI3U0Hg4JYM+FGwtp/7TNPYzDWd5LM
+      DcTwKTjo04ezlz2EwTxZrSK2Tnb2+P96FetQ4ppF2p+ydqSxvoTA9avNk1vN+HAY
+      SoV76CWyaNyZXRtSu8ANP+ZIk/mD7jwDiPVex7+afM9YjEJB7wShIUVmhZnglpWj
+      MQIDAQAB
+      -----END PUBLIC KEY-----
+    JWT_PUBLIC_KEY_1: None
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: 30
+    JWT_SIGNING_KID: 0
+    LOGGING_LEVEL_CONSOLE: "INFO"
+    LOGGING_LEVEL_FILE: "INFO"
+    OAUTH_BASE_REDIRECT_URI: "https://api.no-words.space/auth"
+    POSTGRES_DB: "auth-db"
+    POSTGRES_HOST: "pgbouncer.pg-development.svc.cluster.local"
+    POSTGRES_MAX_OVERFLOW: 10
+    POSTGRES_POOL_SIZE: 40
+    POSTGRES_PORT: 5432
+    POSTGRES_USER: "auth-user"
+    REDIS_DB: 0
+    REDIS_HOST: "redis-mimspace.f.aivencloud.com"
+    REDIS_PORT: 12040
+    REDIS_SSL: "true"
+    REDIS_USERNAME: "default"

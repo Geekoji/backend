@@ -1,0 +1,13 @@
+namespace: cert-manager
+
+cloudflare:
+  apiTokenSecretRef:
+    name: cloudflare-api-token-secret
+    key: api-token
+
+clusterIssuer:
+  name: letsencrypt-dns
+  certEmail: support@no-words.space
+
+  staging:
+    enabled: false

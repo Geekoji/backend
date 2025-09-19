@@ -1,0 +1,6 @@
+dependencies:
+- name: service
+  repository: file://../../../helm/.base-service
+  version: 1.0.0
+digest: sha256:3397015b45792ca07d90464817dcc063f4179413e6a410cea2446b417fddb4c0
+generated: "2025-08-22T01:57:21.6386423+03:00"
